@@ -1,0 +1,12 @@
+{
+  "chainId": 10143,
+  "address": "0x04fc4b1a8f5e9514d0f8f9d4e27e977fb31fb2d1",
+  "txHash": "0x16cc4c30247e0ab90bffcd7ac2d39673c21e24cb9a90ec3d08d2ac5fd6c6d708",
+  "block": 66458780,
+  "owner": "0xB1AF8b1D316E111C10fE6A2EB3b7b747ec37F36a",
+  "keeper": "0xE1DD9275358eC8739462E58e7e09156d41323586",
+  "treasury": "0xB1AF8b1D316E111C10fE6A2EB3b7b747ec37F36a",
+  "feeBps": 200,
+  "minBet": "10000000000000000",
+  "deployedAt": "2026-09-28T16:52:24.069Z"
+}
