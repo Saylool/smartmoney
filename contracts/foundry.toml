@@ -21,3 +21,6 @@ fail_on_revert = false
 
 [lint]
 exclude_lints = ["block-timestamp"]
+
+[rpc_endpoints]
+monad_testnet = "${MONAD_RPC_URL}"
