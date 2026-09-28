@@ -1,0 +1,14 @@
+{
+  "name": "smartmoney-keeper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "NODE_USE_ENV_PROXY=1 node src/deploy.mjs",
+    "status": "NODE_USE_ENV_PROXY=1 node src/status.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.0",
+    "viem": "^2.56.9"
+  }
+}

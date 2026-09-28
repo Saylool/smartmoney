@@ -1,3 +1,6 @@
 out/
 cache/
 .solc/
+.env
+.env.*
+broadcast/
