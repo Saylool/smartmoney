@@ -70,6 +70,7 @@ contract SmartMoneyRounds {
         uint32 wrongBettors; // distinct addresses with stake on Wrong
         uint32 claims; // number of winner claims processed
         bool swept; // dust already moved to treasury
+        uint64 createdBlock; // block of createRound, where SignalPublished can be found
         bytes32 signalHash; // keccak256 of the signal emitted in SignalPublished
         uint256 startPrice;
         uint256 endPrice;
@@ -336,6 +337,7 @@ contract SmartMoneyRounds {
         r.status = Status.Open;
         r.feeBps = feeBps;
         r.signalHash = signalHash;
+        r.createdBlock = uint64(block.number);
 
         emit RoundCreated(roundId, marketId, direction, bettingCloses, startTime, endTime, signalHash);
         emit SignalPublished(roundId, signal);

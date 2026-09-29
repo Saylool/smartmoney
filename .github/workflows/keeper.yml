@@ -1,0 +1,34 @@
+# Backup keeper: runs one idempotent tick every 5 minutes, so rounds keep opening, locking and
+# resolving even when the always-on keeper (npm run keeper) is offline.
+#
+# Setup: repo Settings -> Secrets and variables -> Actions -> New secret
+#   KEEPER_PRIVATE_KEY = the keeper wallet's private key (testnet only)
+name: keeper
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: keeper
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: keeper
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: keeper/package-lock.json
+      - run: npm ci
+      - run: node src/keeper.mjs --once
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}

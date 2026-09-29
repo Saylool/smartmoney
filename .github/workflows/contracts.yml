@@ -1,0 +1,19 @@
+name: contracts
+
+on:
+  push:
+    paths: ["contracts/**"]
+  pull_request:
+    paths: ["contracts/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: forge build --sizes
+      - run: forge test -vv

@@ -1,9 +1,9 @@
 {
   "chainId": 10143,
-  "address": "0x860844ca0ca1f3ec43a8045370d7cef8b329f141",
-  "oracle": "0x762378bcabb0507b56c56fcdd24986b3f6d5c1b3",
+  "address": "0x44bf0e4dd349c9cb46f13826c165ee685d90d069",
+  "oracle": "0xdb74d63a0972dc078b20b0bda002baa77aba6b31",
   "perplExchange": "0x1964c32f0be608e7d29302aff5e61268e72080cc",
-  "deployBlock": 66749830,
+  "deployBlock": 66748051,
   "owner": "0xB1AF8b1D316E111C10fE6A2EB3b7b747ec37F36a",
   "keeper": "0xE1DD9275358eC8739462E58e7e09156d41323586",
   "treasury": "0xB1AF8b1D316E111C10fE6A2EB3b7b747ec37F36a",
@@ -48,5 +48,5 @@
       "signalLotDecimals": 3
     }
   ],
-  "deployedAt": "2026-09-29T17:45:30.809Z"
+  "deployedAt": "2026-09-29T17:36:25.590Z"
 }

@@ -4,9 +4,7 @@ import { formatEther } from "viem";
 import { publicClient, ROOT } from "./chain.mjs";
 
 const dep = JSON.parse(readFileSync(resolve(ROOT, "deployments/monad-testnet.json"), "utf8"));
-const abi = JSON.parse(
-  readFileSync(resolve(ROOT, "contracts/out/SmartMoneyRounds.sol/SmartMoneyRounds.json"), "utf8"),
-).abi;
+const abi = JSON.parse(readFileSync(resolve(ROOT, "keeper/abi/SmartMoneyRounds.json"), "utf8"));
 const c = { address: dep.address, abi };
 const names = ["owner", "keeper", "treasury", "feeBps", "minBet", "roundCount", "treasuryBalance"];
 const values = await Promise.all(names.map((fn) => publicClient.readContract({ ...c, functionName: fn })));

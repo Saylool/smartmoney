@@ -256,6 +256,7 @@ contract SmartMoneyRoundsTest is Test {
         assertEq(uint8(r.direction), uint8(LONG));
         assertEq(r.feeBps, FEE_BPS);
         assertEq(r.signalHash, keccak256(SIGNAL));
+        assertEq(r.createdBlock, block.number);
         assertEq(r.endTime, endTime);
     }
 

@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "deploy": "NODE_USE_ENV_PROXY=1 node src/deploy.mjs",
-    "status": "NODE_USE_ENV_PROXY=1 node src/status.mjs"
+    "status": "NODE_USE_ENV_PROXY=1 node src/status.mjs",
+    "keeper": "NODE_USE_ENV_PROXY=1 node src/keeper.mjs",
+    "tick": "NODE_USE_ENV_PROXY=1 node src/keeper.mjs --once",
+    "verify-signal": "NODE_USE_ENV_PROXY=1 node src/verify-signal.mjs",
+    "backtest": "NODE_USE_ENV_PROXY=1 node src/backtest.mjs",
+    "abi": "node -e \"const fs=require('fs');fs.writeFileSync('abi/SmartMoneyRounds.json', JSON.stringify(JSON.parse(fs.readFileSync('../contracts/out/SmartMoneyRounds.sol/SmartMoneyRounds.json')).abi,null,2)+'\\\\n')\""
   },
   "dependencies": {
     "dotenv": "^17.2.0",
