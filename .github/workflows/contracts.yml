@@ -5,6 +5,7 @@ on:
     paths: ["contracts/**"]
   pull_request:
     paths: ["contracts/**"]
+  workflow_dispatch:
 
 jobs:
   test:
