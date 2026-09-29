@@ -59,7 +59,11 @@ async function recentRounds() {
   const count = Number(await publicClient.readContract({ ...sm, functionName: "roundCount" }));
   const ids = [];
   for (let i = count; i >= 1 && ids.length < SCAN_BACK; i--) ids.push(BigInt(i));
-  const rounds = await Promise.all(ids.map((id) => publicClient.readContract({ ...sm, functionName: "getRound", args: [id] })));
+  // One multicall instead of N eth_calls: the public testnet RPC allows 15 requests/second.
+  const rounds = await publicClient.multicall({
+    contracts: ids.map((id) => ({ ...sm, functionName: "getRound", args: [id] })),
+    allowFailure: false,
+  });
   return ids.map((id, i) => ({ id, ...rounds[i] }));
 }
 
