@@ -1,3 +1,4 @@
 node_modules/
 .env
 logs/
+.e2e-wallets.json

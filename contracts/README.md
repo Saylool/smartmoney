@@ -1,36 +1,50 @@
 # SmartMoney — contracts
 
-Parimutuel rounds on whether Perpl "smart money" (top‑20 traders' net BTC direction over the
-last 30 days) turns out to be right. Built for Monad Metropolis, Track 01.
+Parimutuel rounds on whether Perpl "smart money" (net direction of the top‑20 traders by 30-day PnL) turns
+out to be right. See [SECURITY.md](SECURITY.md) for the threat model.
+
+## Contracts
+
+| Contract | Role |
+| --- | --- |
+| `SmartMoneyRounds` | Markets, rounds, bets, permissionless oracle settlement, pull payouts, stats |
+| `PerplOracleAdapter` | `IPriceOracle` over the Chainlink Data Streams price Perpl stores on-chain per perpetual |
 
 ## Round lifecycle
 
 | Step | Who | When | Effect |
 | --- | --- | --- | --- |
-| `createRound(direction, bettingCloses, startTime, endTime)` | keeper | any time | Opens a round; snapshots `feeBps` |
-| `bet(roundId, side)` | anyone | `now < bettingCloses` | Stakes native token on **Right** or **Wrong** |
-| `lockRound(roundId, startPrice)` | keeper | `[startTime, startTime + 6h]` | Snapshots BTC start price |
-| `resolveRound(roundId, endPrice)` | keeper | `[endTime, endTime + 6h]` | Picks winner, books fee. Tie or one‑sided pool → **Voided** (full refund) |
+| `createRound(marketId, direction, bettingCloses, startTime, signal)` | keeper | any time | Opens a round, snapshots `feeBps`, emits `SignalPublished`, stores `signalHash` and `createdBlock`; `endTime = startTime + market.duration` |
+| `bet(roundId, side)` | anyone | `now < bettingCloses` | Stakes native MON on **Right** or **Wrong** |
+| `lockRound(roundId)` | **anyone** | `[startTime, startTime + SETTLE_WINDOW]` | Reads the start price from `ORACLE`; observation must be `>= startTime` |
+| `resolveRound(roundId)` | **anyone** | `[endTime, endTime + SETTLE_WINDOW]` | Reads the end price; picks the winner. Tie or one‑sided pool → **Voided** |
+| `voidRound(roundId)` | keeper | while `Open` only | Cancels a round that has not started |
+| `voidStaleRound(roundId)` | anyone | a settle window was missed | Full refunds |
 | `claim(roundId)` | bettor | after Resolved / Voided | Pull payout or refund |
-| `sweepRound(roundId)` | anyone | all winners claimed, or `endTime + 90d` | Dust (and forfeited unclaimed winnings) → treasury |
-| `voidStaleRound(roundId)` | anyone | keeper missed the lock/resolve window | Refund path when the keeper is offline |
+| `sweepRound(roundId)` | anyone | all winners claimed, or `endTime + 90d` | Dust (and forfeited winnings) → treasury |
 | `withdrawTreasury()` | anyone | any time | Sends accrued fee + dust to `treasury` |
 
-Payout for a winner: `stake * (rightPool + wrongPool - fee) / winningPool`, rounded down.
-Fee is `feeBps` of the **losing** pool only (max 10 %), so a winner never receives less than their stake.
+Winner payout: `stake * (rightPool + wrongPool - fee) / winningPool`, rounded down. The fee is `feeBps` of the
+**losing** pool only (max 10 %), so a winner never receives less than their stake.
 
-Invariant enforced by the test suite for every settled round:
-`claimedTotal + fee + dust == rightPool + wrongPool`.
+Views for clients: `getRound`, `getMarket`, `getPosition`, `claimable`, `marketStats` (smart money's track record per
+market), `userStats`, `participants(offset, limit)`.
 
-## Build & test
+## Invariants (tested)
+
+- For every swept round: `claimedTotal + fee + dust == rightPool + wrongPool`.
+- The contract is exactly solvent: `balance == treasuryBalance + Σ outstanding obligations`.
+- Money in == payouts + treasury withdrawals + balance.
+- A winner's claimable amount is never below their stake.
+- Track-record and user-stat counters always match settled rounds and actual flows.
+
+## Build and test
 
 ```bash
 forge test
 ```
 
-Offline / sandboxed machine (no solc download): put `solc-macos` 0.8.28 at `.solc/solc-0.8.28` and run
+Offline or sandboxed machine (no solc download): put `solc-macos` 0.8.28 at `.solc/solc-0.8.28` and run
 `FOUNDRY_PROFILE=local forge test`. `forge-std` is vendored under `lib/`.
 
-Handler coverage counters for the invariant suite are printed with `forge test --match-contract Invariant -vv`.
-
-See [SECURITY.md](SECURITY.md) for the threat model.
+Deployment is done by `keeper/src/deploy.mjs` (viem) or `script/Deploy.s.sol` (forge).
