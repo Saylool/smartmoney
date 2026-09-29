@@ -1,17 +1,55 @@
 "use client";
 
-import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { monad } from "@/lib/config";
+import { useAccount, useBalance, useConnect, useDisconnect, useSwitchChain } from "wagmi";
+import { usePrivy } from "@privy-io/react-auth";
+import { FAUCET_URL, PRIVY_APP_ID, monad } from "@/lib/config";
+import { fmtMon } from "@/lib/contract";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
-export function Connect() {
-  const { address, isConnected, chainId } = useAccount();
+function Account() {
+  const { address, chainId } = useAccount();
+  const { switchChain } = useSwitchChain();
+  const { data: bal } = useBalance({ address, query: { enabled: !!address } });
+  if (!address) return null;
+  if (chainId !== monad.id) {
+    return <button onClick={() => switchChain({ chainId: monad.id })}>Switch to {monad.name}</button>;
+  }
+  return (
+    <div className="account">
+      <span className="mono small">{short(address)}</span>
+      {bal && (
+        <span className="small muted">
+          {fmtMon(bal.value, 3)} MON
+          {bal.value === 0n && (
+            <>
+              {" · "}
+              <a href={FAUCET_URL} target="_blank" rel="noreferrer">get testnet MON</a>
+            </>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PrivyConnect() {
+  const { ready, authenticated, login, logout } = usePrivy();
+  if (!ready) return <button disabled>Loading…</button>;
+  if (!authenticated) return <button onClick={login}>Log in</button>;
+  return (
+    <div className="row center gap8">
+      <Account />
+      <button className="secondary" onClick={logout}>Log out</button>
+    </div>
+  );
+}
+
+function InjectedConnect() {
+  const { isConnected } = useAccount();
   const { connectors, connect, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
-
-  if (!isConnected || !address) {
+  if (!isConnected) {
     const c = connectors[0];
     return (
       <button onClick={() => c && connect({ connector: c })} disabled={!c || isPending}>
@@ -19,15 +57,14 @@ export function Connect() {
       </button>
     );
   }
-  if (chainId !== monad.id) {
-    return (
-      <button onClick={() => switchChain({ chainId: monad.id })}>Switch to {monad.name}</button>
-    );
-  }
   return (
-    <div className="row" style={{ alignItems: "center", gap: 8 }}>
-      <span className="mono small">{short(address)}</span>
+    <div className="row center gap8">
+      <Account />
       <button className="secondary" onClick={() => disconnect()}>Disconnect</button>
     </div>
   );
+}
+
+export function Connect() {
+  return PRIVY_APP_ID ? <PrivyConnect /> : <InjectedConnect />;
 }

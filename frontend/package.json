@@ -7,14 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "abi": "cd ../contracts && forge inspect SmartMoneyRounds abi --json > ../frontend/src/lib/abi.json && cd ../frontend && node scripts/abi-to-ts.js"
+    "abi": "node scripts/abi-to-ts.js"
   },
   "dependencies": {
+    "@privy-io/react-auth": "^3.46.0",
+    "@privy-io/wagmi": "^4.0.17",
     "@tanstack/react-query": "^5.104.0",
     "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "viem": "^2.56.9",
+    "viem": "2.56.0",
     "wagmi": "^3.7.7"
   },
   "devDependencies": {
