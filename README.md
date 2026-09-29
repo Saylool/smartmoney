@@ -11,6 +11,7 @@ Built for **Monad Metropolis, Track 01**.
 
 | | |
 | --- | --- |
+| **Live app** | **https://smartmoney-zeta.vercel.app** |
 | Live contract (Monad testnet) | [`0x860844ca0ca1f3ec43a8045370d7cef8b329f141`](https://testnet.monadvision.com/address/0x860844ca0ca1f3ec43a8045370d7cef8b329f141) |
 | Oracle adapter | [`0x762378bcabb0507b56c56fcdd24986b3f6d5c1b3`](https://testnet.monadvision.com/address/0x762378bcabb0507b56c56fcdd24986b3f6d5c1b3) |
 | Markets | BTC 1h, BTC 15m, ETH 1h, SOL 1h |

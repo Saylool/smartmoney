@@ -22,13 +22,24 @@ jobs:
       run:
         working-directory: keeper
     steps:
+      - name: Skip when the keeper key is not configured
+        id: key
+        env:
+          KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "KEEPER_PRIVATE_KEY secret not set, skipping"; echo "ok=false" >> "$GITHUB_OUTPUT"; else echo "ok=true" >> "$GITHUB_OUTPUT"; fi
+        working-directory: .
       - uses: actions/checkout@v4
+        if: steps.key.outputs.ok == 'true'
       - uses: actions/setup-node@v4
+        if: steps.key.outputs.ok == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: keeper/package-lock.json
       - run: npm ci
+        if: steps.key.outputs.ok == 'true'
       - run: node src/keeper.mjs --once
+        if: steps.key.outputs.ok == 'true'
         env:
           DEPLOYER_PRIVATE_KEY: ${{ secrets.KEEPER_PRIVATE_KEY }}
