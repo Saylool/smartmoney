@@ -21,6 +21,10 @@ const { account, client } = walletClient();
 const TICK_SECONDS = Number(process.env.TICK_SECONDS ?? 20);
 const SCAN_BACK = 60; // how many recent rounds to inspect each tick
 const MIN_BETTING_SECONDS = 120; // don't open a round with less betting time than this
+// Comma-separated market ids to run (default: all). E.g. KEEPER_MARKETS=1,3,4 skips BTC 15m to save gas.
+const ACTIVE_MARKETS = new Set(
+  (process.env.KEEPER_MARKETS ?? MARKETS.map((_, i) => i + 1).join(",")).split(",").map((x) => Number(x.trim())),
+);
 
 const Status = { None: 0, Open: 1, Locked: 2, Resolved: 3, Voided: 4 };
 const now = () => Math.floor(Date.now() / 1000);
@@ -63,6 +67,7 @@ async function createDueRounds(rounds, t) {
   for (let i = 0; i < MARKETS.length; i++) {
     const marketId = i + 1;
     const m = MARKETS[i];
+    if (!ACTIVE_MARKETS.has(marketId)) continue;
     const d = m.duration;
     // next aligned slot whose betting window is still long enough
     let start = Math.ceil(t / d) * d;
@@ -91,6 +96,9 @@ async function settle(rounds, t, window) {
   for (const r of rounds) {
     const start = Number(r.startTime);
     const end = Number(r.endTime);
+    // Nobody bet: there is nothing to settle or refund, so don't spend gas on lock/resolve/void.
+    // (Bets are impossible after bettingCloses, so an empty round past its start stays empty.)
+    if (r.status === Status.Open && t >= Number(r.bettingCloses) && r.rightPool + r.wrongPool === 0n) continue;
     if (r.status === Status.Open && t >= start && t <= start + window) {
       const res = await write(`lockRound #${r.id}`, "lockRound", [r.id]);
       if (!res.ok && res.reason !== "StalePrice") log(`lock #${r.id}: ${res.reason}`);

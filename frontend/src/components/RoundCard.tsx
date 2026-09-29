@@ -21,6 +21,7 @@ const PHASE_LABEL = {
   settling: "Settling",
   resolved: "Resolved",
   voided: "Refunded",
+  empty: "No bets",
 } as const;
 
 const QUICK = ["0.05", "0.1", "0.5", "1"];
@@ -100,6 +101,7 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
       <div className="row gap16 wrap small">
         {phase === "betting" && <Countdown to={round.bettingCloses} prefix="Betting closes" />}
         {phase === "starting" && <span className="muted">Waiting for the start price from the oracle…</span>}
+        {phase === "empty" && <span className="muted">Nobody bet on this round, so there is nothing to settle.</span>}
         {phase === "live" && <Countdown to={round.endTime} prefix="Ends" />}
         {phase === "settling" && <span className="muted">Waiting for the end price from the oracle…</span>}
         {round.startPrice > 0n && (

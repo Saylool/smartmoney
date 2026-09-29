@@ -38,13 +38,17 @@ export type Round = {
 
 export type RoundWithId = Round & { id: bigint };
 
-export type Phase = "betting" | "starting" | "live" | "settling" | "resolved" | "voided";
+export type Phase = "betting" | "starting" | "live" | "settling" | "resolved" | "voided" | "empty";
 
 /** User-facing phase of a round at time `now` (unix seconds). */
 export function phaseOf(r: Round, now: number): Phase {
   if (r.status === Status.Resolved) return "resolved";
   if (r.status === Status.Voided) return "voided";
-  if (r.status === Status.Open) return now < Number(r.bettingCloses) ? "betting" : "starting";
+  if (r.status === Status.Open) {
+    if (now < Number(r.bettingCloses)) return "betting";
+    // Nobody bet: the keeper skips settlement since there is nothing to pay out or refund.
+    return r.rightPool + r.wrongPool === 0n ? "empty" : "starting";
+  }
   return now < Number(r.endTime) ? "live" : "settling";
 }
 
