@@ -3,8 +3,10 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {SmartMoneyRounds} from "../src/SmartMoneyRounds.sol";
+import {IPriceOracle} from "../src/interfaces/IPriceOracle.sol";
+import {MockOracle} from "./mocks/MockOracle.sol";
 
-/// @dev Reenters claim() from its receive hook; the inner call must revert with AlreadyClaimed.
+/// @dev Reenters claim() from its receive hook; the inner call must revert.
 contract Reenterer {
     SmartMoneyRounds immutable sm;
     uint256 roundId;
@@ -39,6 +41,7 @@ contract RejectsEther {
 
 contract SmartMoneyRoundsTest is Test {
     SmartMoneyRounds sm;
+    MockOracle oracle;
 
     address owner = makeAddr("owner");
     address keeper = makeAddr("keeper");
@@ -49,11 +52,15 @@ contract SmartMoneyRoundsTest is Test {
 
     uint16 constant FEE_BPS = 200; // 2 %
     uint256 constant MIN_BET = 0.01 ether;
+    uint64 constant WINDOW = 20 minutes;
+    uint64 constant FEED = 16;
+    uint256 constant MARKET = 1;
+    bytes constant SIGNAL = bytes('{"v":1,"traders":[]}');
 
     uint64 constant T0 = 1_800_000_000;
     uint64 bettingCloses = T0 + 50 minutes;
     uint64 startTime = T0 + 1 hours;
-    uint64 endTime = T0 + 2 hours;
+    uint64 endTime = T0 + 2 hours; // market duration = 1 hour
 
     SmartMoneyRounds.Direction constant LONG = SmartMoneyRounds.Direction.Long;
     SmartMoneyRounds.Direction constant SHORT = SmartMoneyRounds.Direction.Short;
@@ -62,7 +69,10 @@ contract SmartMoneyRoundsTest is Test {
 
     function setUp() public {
         vm.warp(T0);
-        sm = new SmartMoneyRounds(owner, keeper, treasury, FEE_BPS, MIN_BET);
+        oracle = new MockOracle();
+        sm = new SmartMoneyRounds(owner, keeper, treasury, FEE_BPS, MIN_BET, oracle, WINDOW);
+        vm.prank(owner);
+        sm.addMarket("BTC", FEED, 1 hours);
         vm.deal(alice, 1000 ether);
         vm.deal(bob, 1000 ether);
         vm.deal(carol, 1000 ether);
@@ -72,7 +82,7 @@ contract SmartMoneyRoundsTest is Test {
 
     function _create(SmartMoneyRounds.Direction d) internal returns (uint256 id) {
         vm.prank(keeper);
-        id = sm.createRound(d, bettingCloses, startTime, endTime);
+        id = sm.createRound(MARKET, d, bettingCloses, startTime, SIGNAL);
     }
 
     function _bet(address who, uint256 id, SmartMoneyRounds.Side side, uint256 amt) internal {
@@ -82,14 +92,14 @@ contract SmartMoneyRoundsTest is Test {
 
     function _lock(uint256 id, uint256 price) internal {
         vm.warp(startTime);
-        vm.prank(keeper);
-        sm.lockRound(id, price);
+        oracle.set(FEED, price, startTime);
+        sm.lockRound(id);
     }
 
     function _resolve(uint256 id, uint256 price) internal {
         vm.warp(endTime);
-        vm.prank(keeper);
-        sm.resolveRound(id, price);
+        oracle.set(FEED, price, endTime);
+        sm.resolveRound(id);
     }
 
     function _claim(address who, uint256 id) internal returns (uint256 got) {
@@ -107,17 +117,25 @@ contract SmartMoneyRoundsTest is Test {
         assertEq(sm.treasury(), treasury);
         assertEq(sm.feeBps(), FEE_BPS);
         assertEq(sm.minBet(), MIN_BET);
+        assertEq(address(sm.ORACLE()), address(oracle));
+        assertEq(sm.SETTLE_WINDOW(), WINDOW);
     }
 
-    function test_constructor_revertsOnZeroAddressAndHighFee() public {
+    function test_constructor_reverts() public {
         vm.expectRevert(SmartMoneyRounds.ZeroAddress.selector);
-        new SmartMoneyRounds(address(0), keeper, treasury, FEE_BPS, MIN_BET);
+        new SmartMoneyRounds(address(0), keeper, treasury, FEE_BPS, MIN_BET, oracle, WINDOW);
         vm.expectRevert(SmartMoneyRounds.ZeroAddress.selector);
-        new SmartMoneyRounds(owner, address(0), treasury, FEE_BPS, MIN_BET);
+        new SmartMoneyRounds(owner, address(0), treasury, FEE_BPS, MIN_BET, oracle, WINDOW);
         vm.expectRevert(SmartMoneyRounds.ZeroAddress.selector);
-        new SmartMoneyRounds(owner, keeper, address(0), FEE_BPS, MIN_BET);
+        new SmartMoneyRounds(owner, keeper, address(0), FEE_BPS, MIN_BET, oracle, WINDOW);
+        vm.expectRevert(SmartMoneyRounds.ZeroAddress.selector);
+        new SmartMoneyRounds(owner, keeper, treasury, FEE_BPS, MIN_BET, IPriceOracle(address(0)), WINDOW);
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.FeeTooHigh.selector, 1001, 1000));
-        new SmartMoneyRounds(owner, keeper, treasury, 1001, MIN_BET);
+        new SmartMoneyRounds(owner, keeper, treasury, 1001, MIN_BET, oracle, WINDOW);
+        vm.expectRevert(SmartMoneyRounds.InvalidWindow.selector);
+        new SmartMoneyRounds(owner, keeper, treasury, FEE_BPS, MIN_BET, oracle, 30);
+        vm.expectRevert(SmartMoneyRounds.InvalidWindow.selector);
+        new SmartMoneyRounds(owner, keeper, treasury, FEE_BPS, MIN_BET, oracle, 2 days);
     }
 
     function test_admin_onlyOwner() public {
@@ -132,6 +150,10 @@ contract SmartMoneyRoundsTest is Test {
         sm.setMinBet(1);
         vm.expectRevert(SmartMoneyRounds.NotOwner.selector);
         sm.transferOwnership(alice);
+        vm.expectRevert(SmartMoneyRounds.NotOwner.selector);
+        sm.addMarket("ETH", 32, 1 hours);
+        vm.expectRevert(SmartMoneyRounds.NotOwner.selector);
+        sm.setMarketActive(1, false);
         vm.stopPrank();
     }
 
@@ -161,39 +183,80 @@ contract SmartMoneyRoundsTest is Test {
         vm.stopPrank();
     }
 
-    // ------------------------------------------------------------------ createRound
+    // ------------------------------------------------------------------ markets
+
+    function test_markets_addAndToggle() public {
+        vm.startPrank(owner);
+        uint256 eth = sm.addMarket("ETH", 32, 15 minutes);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.InvalidMarket.selector, 0));
+        sm.addMarket("", 1, 1 hours);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.InvalidMarket.selector, 0));
+        sm.addMarket("X", 1, 0);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.InvalidMarket.selector, 9));
+        sm.setMarketActive(9, false);
+        sm.setMarketActive(eth, false);
+        vm.stopPrank();
+
+        assertEq(eth, 2);
+        assertEq(sm.marketCount(), 2);
+        SmartMoneyRounds.Market memory m = sm.getMarket(eth);
+        assertEq(m.symbol, "ETH");
+        assertEq(m.feedId, 32);
+        assertEq(m.duration, 15 minutes);
+        assertFalse(m.active);
+
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.MarketInactive.selector, eth));
+        sm.createRound(eth, LONG, bettingCloses, startTime, SIGNAL);
+    }
+
+    function test_markets_endTimeFollowsDuration() public {
+        vm.prank(owner);
+        uint256 fast = sm.addMarket("BTC", FEED, 15 minutes);
+        vm.prank(keeper);
+        uint256 id = sm.createRound(fast, LONG, bettingCloses, startTime, SIGNAL);
+        assertEq(sm.getRound(id).endTime, startTime + 15 minutes);
+        assertEq(sm.getRound(id).marketId, fast);
+    }
+
+    // ------------------------------------------------------------------ createRound / signal
 
     function test_createRound_onlyKeeper() public {
         vm.expectRevert(SmartMoneyRounds.NotKeeper.selector);
-        sm.createRound(LONG, bettingCloses, startTime, endTime);
+        sm.createRound(MARKET, LONG, bettingCloses, startTime, SIGNAL);
     }
 
-    function test_createRound_validatesSchedule() public {
+    function test_createRound_validates() public {
         vm.startPrank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.InvalidMarket.selector, 0));
+        sm.createRound(0, LONG, bettingCloses, startTime, SIGNAL);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.InvalidMarket.selector, 7));
+        sm.createRound(7, LONG, bettingCloses, startTime, SIGNAL);
         vm.expectRevert(SmartMoneyRounds.InvalidDirection.selector);
-        sm.createRound(SmartMoneyRounds.Direction.None, bettingCloses, startTime, endTime);
-        // bettingCloses in the past / now
+        sm.createRound(MARKET, SmartMoneyRounds.Direction.None, bettingCloses, startTime, SIGNAL);
         vm.expectRevert(SmartMoneyRounds.InvalidSchedule.selector);
-        sm.createRound(LONG, T0, startTime, endTime);
-        // startTime before bettingCloses
+        sm.createRound(MARKET, LONG, T0, startTime, SIGNAL); // closes now
         vm.expectRevert(SmartMoneyRounds.InvalidSchedule.selector);
-        sm.createRound(LONG, bettingCloses, bettingCloses - 1, endTime);
-        // endTime <= startTime
-        vm.expectRevert(SmartMoneyRounds.InvalidSchedule.selector);
-        sm.createRound(LONG, bettingCloses, startTime, startTime);
+        sm.createRound(MARKET, LONG, bettingCloses, bettingCloses - 1, SIGNAL); // start before close
+        vm.expectRevert(SmartMoneyRounds.EmptySignal.selector);
+        sm.createRound(MARKET, LONG, bettingCloses, startTime, "");
         vm.stopPrank();
     }
 
-    function test_createRound_emitsAndStores() public {
+    function test_createRound_emitsSignalAndStoresHash() public {
+        vm.expectEmit(true, true, false, true);
+        emit SmartMoneyRounds.RoundCreated(1, MARKET, LONG, bettingCloses, startTime, endTime, keccak256(SIGNAL));
         vm.expectEmit(true, false, false, true);
-        emit SmartMoneyRounds.RoundCreated(1, LONG, bettingCloses, startTime, endTime);
+        emit SmartMoneyRounds.SignalPublished(1, SIGNAL);
         uint256 id = _create(LONG);
-        assertEq(id, 1);
+
         SmartMoneyRounds.Round memory r = sm.getRound(id);
+        assertEq(id, 1);
         assertEq(uint8(r.status), uint8(SmartMoneyRounds.Status.Open));
         assertEq(uint8(r.direction), uint8(LONG));
         assertEq(r.feeBps, FEE_BPS);
-        assertEq(sm.roundCount(), 1);
+        assertEq(r.signalHash, keccak256(SIGNAL));
+        assertEq(r.endTime, endTime);
     }
 
     function test_feeSnapshot_ownerChangeDoesNotAffectOpenRound() public {
@@ -204,8 +267,7 @@ contract SmartMoneyRoundsTest is Test {
         _bet(bob, id, WRONG, 1 ether);
         _lock(id, 100);
         _resolve(id, 110);
-        // fee must be 2 % of the losing pool, not 10 %
-        assertEq(sm.getRound(id).fee, 0.02 ether);
+        assertEq(sm.getRound(id).fee, 0.02 ether); // 2 %, not 10 %
     }
 
     // ------------------------------------------------------------------ bet
@@ -242,13 +304,11 @@ contract SmartMoneyRoundsTest is Test {
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.BetBelowMinimum.selector, MIN_BET - 1, MIN_BET));
         _bet(alice, id, RIGHT, MIN_BET - 1);
 
-        // exactly at bettingCloses -> closed (strict)
-        vm.warp(bettingCloses);
+        vm.warp(bettingCloses); // strict: closed at bettingCloses
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.BettingClosed.selector, id));
         _bet(alice, id, RIGHT, 1 ether);
 
-        // between bettingCloses and startTime: still closed, no late-entry edge
-        vm.warp(startTime - 1);
+        vm.warp(startTime - 1); // still closed before start: no late-entry edge
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.BettingClosed.selector, id));
         _bet(alice, id, RIGHT, 1 ether);
 
@@ -268,65 +328,80 @@ contract SmartMoneyRoundsTest is Test {
         assertEq(sm.getRound(id).rightPool, 1 ether);
     }
 
-    // ------------------------------------------------------------------ lock / resolve
+    // ------------------------------------------------------------------ lock / resolve (permissionless, oracle-priced)
 
-    function test_lock_timingAndAuth() public {
+    function test_lock_anyoneCanCall_priceFromOracle() public {
         uint256 id = _create(LONG);
-        vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooEarly.selector, id, startTime));
-        sm.lockRound(id, 100);
-
-        vm.warp(startTime);
-        vm.expectRevert(SmartMoneyRounds.NotKeeper.selector);
-        sm.lockRound(id, 100);
-
-        vm.prank(keeper);
-        vm.expectRevert(SmartMoneyRounds.ZeroPrice.selector);
-        sm.lockRound(id, 0);
-
-        uint64 grace = sm.LIVENESS_GRACE();
-        vm.warp(startTime + grace + 1);
-        vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooLate.selector, id, startTime + grace));
-        sm.lockRound(id, 100);
+        vm.warp(startTime + 30);
+        oracle.set(FEED, 83_094_1, startTime + 20);
+        vm.expectEmit(true, false, true, true);
+        emit SmartMoneyRounds.RoundLocked(id, 83_094_1, startTime + 20, carol);
+        vm.prank(carol);
+        sm.lockRound(id);
+        assertEq(sm.getRound(id).startPrice, 83_094_1);
     }
 
-    function test_lock_thenResolveTiming() public {
+    function test_lock_timing() public {
+        uint256 id = _create(LONG);
+        oracle.set(FEED, 100, T0);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooEarly.selector, id, startTime));
+        sm.lockRound(id);
+
+        vm.warp(startTime + WINDOW + 1);
+        oracle.set(FEED, 100, startTime + WINDOW);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooLate.selector, id, startTime + WINDOW));
+        sm.lockRound(id);
+    }
+
+    function test_lock_rejectsPriceObservedBeforeStart() public {
+        uint256 id = _create(LONG);
+        vm.warp(startTime + 10);
+        oracle.set(FEED, 100, startTime - 1); // oracle has not ticked since the round started
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.StalePrice.selector, id, startTime - 1, startTime));
+        sm.lockRound(id);
+
+        oracle.set(FEED, 0, startTime + 5);
+        vm.expectRevert(); // mock reverts on zero price
+        sm.lockRound(id);
+    }
+
+    function test_resolve_timingAndStaleness() public {
         uint256 id = _create(LONG);
         _bet(alice, id, RIGHT, 1 ether);
         _bet(bob, id, WRONG, 1 ether);
 
         vm.warp(startTime);
-        vm.prank(keeper);
         vm.expectRevert(
             abi.encodeWithSelector(
                 SmartMoneyRounds.WrongStatus.selector, id, SmartMoneyRounds.Status.Locked, SmartMoneyRounds.Status.Open
             )
         );
-        sm.resolveRound(id, 100);
+        sm.resolveRound(id);
 
-        vm.prank(keeper);
-        vm.expectEmit(true, false, false, true);
-        emit SmartMoneyRounds.RoundLocked(id, 100);
-        sm.lockRound(id, 100);
-
-        vm.prank(keeper);
+        _lock(id, 100);
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooEarly.selector, id, endTime));
-        sm.resolveRound(id, 110);
+        sm.resolveRound(id);
 
-        uint64 grace = sm.LIVENESS_GRACE();
-        vm.warp(endTime + grace + 1);
-        vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooLate.selector, id, endTime + grace));
-        sm.resolveRound(id, 110);
+        vm.warp(endTime + 5);
+        oracle.set(FEED, 120, endTime - 30); // last observation is before endTime
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.StalePrice.selector, id, endTime - 30, endTime));
+        sm.resolveRound(id);
+
+        vm.warp(endTime + WINDOW + 1);
+        oracle.set(FEED, 120, endTime + WINDOW);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TooLate.selector, id, endTime + WINDOW));
+        sm.resolveRound(id);
     }
 
-    function test_resolve_directionMatrix() public {
-        // (direction, up?) -> winner
+    function test_resolve_directionMatrix_andStats() public {
         _assertWinner(LONG, 100, 101, RIGHT);
         _assertWinner(LONG, 100, 99, WRONG);
         _assertWinner(SHORT, 100, 99, RIGHT);
         _assertWinner(SHORT, 100, 101, WRONG);
+        (uint32 right, uint32 wrong, uint32 voided) = sm.marketStats(MARKET);
+        assertEq(right, 2);
+        assertEq(wrong, 2);
+        assertEq(voided, 0);
     }
 
     function _assertWinner(SmartMoneyRounds.Direction d, uint256 p0, uint256 p1, SmartMoneyRounds.Side expected)
@@ -348,14 +423,16 @@ contract SmartMoneyRoundsTest is Test {
         _bet(bob, id, WRONG, 2 ether);
         _lock(id, 100);
         vm.warp(endTime);
-        vm.prank(keeper);
+        oracle.set(FEED, 100, endTime);
         vm.expectEmit(true, true, false, true);
-        emit SmartMoneyRounds.RoundVoided(id, keeper, "tie");
-        sm.resolveRound(id, 100);
+        emit SmartMoneyRounds.RoundVoided(id, address(this), "tie");
+        sm.resolveRound(id);
         assertEq(uint8(sm.getRound(id).status), uint8(SmartMoneyRounds.Status.Voided));
         assertEq(sm.treasuryBalance(), 0);
         assertEq(_claim(alice, id), 1 ether);
         assertEq(_claim(bob, id), 2 ether);
+        (,, uint32 voided) = sm.marketStats(MARKET);
+        assertEq(voided, 1);
     }
 
     function test_resolve_oneSidedVoidsAndRefunds() public {
@@ -363,7 +440,7 @@ contract SmartMoneyRoundsTest is Test {
         _bet(alice, id, RIGHT, 1 ether);
         _bet(carol, id, RIGHT, 4 ether);
         _lock(id, 100);
-        _resolve(id, 200); // smart money "right", but nobody on the other side
+        _resolve(id, 200);
         assertEq(uint8(sm.getRound(id).status), uint8(SmartMoneyRounds.Status.Voided));
         assertEq(_claim(alice, id), 1 ether);
         assertEq(_claim(carol, id), 4 ether);
@@ -407,6 +484,35 @@ contract SmartMoneyRoundsTest is Test {
         sm.claim(id);
     }
 
+    function test_userStats_andParticipants() public {
+        uint256 id = _create(LONG);
+        _bet(alice, id, RIGHT, 1 ether);
+        _bet(alice, id, RIGHT, 1 ether);
+        _bet(bob, id, WRONG, 2 ether);
+        _lock(id, 100);
+        _resolve(id, 150); // alice wins 3.96
+        _claim(alice, id);
+
+        (uint128 staked, uint128 returned, uint32 bets, uint32 wins) = sm.userStats(alice);
+        assertEq(staked, 2 ether);
+        assertEq(returned, 3.96 ether);
+        assertEq(bets, 2);
+        assertEq(wins, 1);
+        (staked, returned, bets, wins) = sm.userStats(bob);
+        assertEq(staked, 2 ether);
+        assertEq(returned, 0);
+        assertEq(bets, 1);
+        assertEq(wins, 0);
+
+        assertEq(sm.participantCount(), 2);
+        address[] memory ps = sm.participants(0, 10);
+        assertEq(ps.length, 2);
+        assertEq(ps[0], alice);
+        assertEq(ps[1], bob);
+        assertEq(sm.participants(1, 10).length, 1);
+        assertEq(sm.participants(5, 10).length, 0);
+    }
+
     function test_claim_revertsWhileOpenOrLocked() public {
         uint256 id = _create(LONG);
         _bet(alice, id, RIGHT, 1 ether);
@@ -428,9 +534,8 @@ contract SmartMoneyRoundsTest is Test {
         _bet(alice, id, WRONG, 1 ether);
         _bet(bob, id, WRONG, 1 ether);
         _lock(id, 100);
-        _resolve(id, 90); // Wrong wins; losing pool = 1 (alice's right)
-        // fee 0.02 ; distributable 2.98 ; alice has 1 of 2 wrong -> 1.49
-        assertEq(_claim(alice, id), 1.49 ether);
+        _resolve(id, 90); // Wrong wins; losing pool = 1
+        assertEq(_claim(alice, id), 1.49 ether); // (3 - 0.02) / 2
         assertEq(_claim(bob, id), 1.49 ether);
     }
 
@@ -445,7 +550,6 @@ contract SmartMoneyRoundsTest is Test {
 
         uint256 before = address(evil).balance;
         evil.attack();
-        // paid exactly once, inner reentrant call reverted (AlreadyClaimed / Reentrancy)
         assertEq(address(evil).balance - before, 1.98 ether);
         assertTrue(evil.innerReverted());
         assertEq(address(sm).balance, 0.02 ether); // only fee left
@@ -463,13 +567,12 @@ contract SmartMoneyRoundsTest is Test {
         vm.prank(address(rej));
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.TransferFailed.selector, address(rej), 1.98 ether));
         sm.claim(id);
-        // state must roll back with the revert
         assertFalse(sm.getPosition(id, address(rej)).claimed);
     }
 
     // ------------------------------------------------------------------ void
 
-    function test_voidRound_keeperOnlyBeforeResolve() public {
+    function test_voidRound_keeperOnlyWhileOpen() public {
         uint256 id = _create(LONG);
         _bet(alice, id, RIGHT, 1 ether);
         vm.expectRevert(SmartMoneyRounds.NotKeeper.selector);
@@ -483,14 +586,24 @@ contract SmartMoneyRoundsTest is Test {
         sm.voidRound(id);
     }
 
+    function test_voidRound_keeperCannotVoidLockedRound() public {
+        uint256 id = _create(LONG);
+        _bet(alice, id, RIGHT, 1 ether);
+        _bet(bob, id, WRONG, 1 ether);
+        _lock(id, 100);
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.NotVoidable.selector, id));
+        sm.voidRound(id);
+    }
+
     function test_voidStaleRound_openNeverLocked() public {
         uint256 id = _create(LONG);
         _bet(alice, id, RIGHT, 1 ether);
-        vm.warp(startTime + sm.LIVENESS_GRACE());
+        vm.warp(startTime + WINDOW);
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.NotVoidable.selector, id));
         sm.voidStaleRound(id);
-        vm.warp(startTime + sm.LIVENESS_GRACE() + 1);
-        vm.prank(carol); // anyone
+        vm.warp(startTime + WINDOW + 1);
+        vm.prank(carol);
         sm.voidStaleRound(id);
         assertEq(_claim(alice, id), 1 ether);
     }
@@ -500,10 +613,10 @@ contract SmartMoneyRoundsTest is Test {
         _bet(alice, id, RIGHT, 1 ether);
         _bet(bob, id, WRONG, 2 ether);
         _lock(id, 100);
-        vm.warp(endTime + sm.LIVENESS_GRACE());
+        vm.warp(endTime + WINDOW);
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.NotVoidable.selector, id));
         sm.voidStaleRound(id);
-        vm.warp(endTime + sm.LIVENESS_GRACE() + 1);
+        vm.warp(endTime + WINDOW + 1);
         sm.voidStaleRound(id);
         assertEq(_claim(alice, id), 1 ether);
         assertEq(_claim(bob, id), 2 ether);
@@ -524,7 +637,6 @@ contract SmartMoneyRoundsTest is Test {
 
     function test_sweep_exactDustAfterAllWinnersClaim() public {
         uint256 id = _create(LONG);
-        // 3 winners with awkward stakes so division leaves dust
         vm.deal(address(0xBEEF), 1 ether);
         _bet(alice, id, RIGHT, 1 ether + 1);
         _bet(carol, id, RIGHT, 3 ether + 7);
@@ -576,10 +688,10 @@ contract SmartMoneyRoundsTest is Test {
         assertEq(r.claimedTotal + r.fee + r.dust, r.rightPool + r.wrongPool);
         assertEq(address(sm).balance, sm.treasuryBalance());
 
+        assertEq(sm.claimable(id, carol), 0);
         vm.prank(carol);
         vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.RoundSwept.selector, id));
         sm.claim(id);
-        assertEq(sm.claimable(id, carol), 1.98 ether); // view still shows; claim is closed
     }
 
     function test_sweep_notOnVoided() public {
@@ -601,7 +713,7 @@ contract SmartMoneyRoundsTest is Test {
         _lock(id, 100);
         _resolve(id, 110);
         uint256 before = treasury.balance;
-        vm.prank(carol); // anyone can trigger, funds only go to treasury
+        vm.prank(carol);
         sm.withdrawTreasury();
         assertEq(treasury.balance - before, 0.02 ether);
         assertEq(sm.treasuryBalance(), 0);
@@ -680,6 +792,19 @@ contract SmartMoneyRoundsTest is Test {
             vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.BetBelowMinimum.selector, amt, MIN_BET));
         }
         _bet(alice, id, RIGHT, amt);
+    }
+
+    /// @dev A lock succeeds iff within the window and the oracle observation is not older than startTime.
+    function testFuzz_lockAcceptsOnlyFreshPrices(uint64 callAt, uint64 observedAt) public {
+        uint256 id = _create(LONG);
+        callAt = uint64(bound(callAt, startTime, startTime + WINDOW));
+        observedAt = uint64(bound(observedAt, startTime - 10 minutes, callAt));
+        vm.warp(callAt);
+        oracle.set(FEED, 123, observedAt);
+        if (observedAt < startTime) {
+            vm.expectRevert(abi.encodeWithSelector(SmartMoneyRounds.StalePrice.selector, id, observedAt, startTime));
+        }
+        sm.lockRound(id);
     }
 
     /// @dev Voided rounds refund exactly the stakes, on both sides, with no fee.

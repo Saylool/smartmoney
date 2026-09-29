@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {SmartMoneyRounds} from "../src/SmartMoneyRounds.sol";
+import {MockOracle} from "./mocks/MockOracle.sol";
 
 /// @dev Drives the contract through random-but-valid sequences of keeper and user actions.
 contract Handler is Test {
@@ -28,8 +29,11 @@ contract Handler is Test {
     uint256 public ghostSweptExact; // swept because every winner claimed
     uint256 public ghostSweptWindow; // swept after CLAIM_WINDOW
 
-    constructor(SmartMoneyRounds sm_, address keeper_, address owner_) {
+    MockOracle public oracle;
+
+    constructor(SmartMoneyRounds sm_, MockOracle oracle_, address keeper_, address owner_) {
         sm = sm_;
+        oracle = oracle_;
         keeper = keeper_;
         owner = owner_;
         for (uint256 i = 0; i < 6; i++) {
@@ -57,7 +61,13 @@ contract Handler is Test {
 
     // ------------------------------------------------------------ actions
 
-    function createRound(uint8 dir, uint32 betDur, uint32 gap, uint32 roundDur) external {
+    /// @dev Oracle observes `price` right now for the round's market feed.
+    function _tick(uint256 id, uint256 price) internal {
+        SmartMoneyRounds.Market memory m = sm.getMarket(sm.getRound(id).marketId);
+        oracle.set(m.feedId, price, block.timestamp);
+    }
+
+    function createRound(uint8 dir, uint32 betDur, uint32 gap, uint8 marketSeed) external {
         SmartMoneyRounds.Direction d = dir % 2 == 0 ? SmartMoneyRounds.Direction.Long : SmartMoneyRounds.Direction.Short;
         // Keep at most one round accepting bets at a time (mirrors the hourly keeper cadence
         // and stops the handler from starving bets by warping past every betting window).
@@ -66,11 +76,11 @@ contract Handler is Test {
             if (last.status == SmartMoneyRounds.Status.Open) return;
         }
         uint64 now_ = uint64(block.timestamp);
-        uint64 bc = now_ + uint64(bound(betDur, 30 minutes, 2 hours));
-        uint64 st = bc + uint64(bound(gap, 0, 1 hours));
-        uint64 et = st + uint64(bound(roundDur, 1, 3 hours));
+        uint64 bc = now_ + uint64(bound(betDur, 5 minutes, 40 minutes));
+        uint64 st = bc + uint64(bound(gap, 0, 10 minutes));
+        uint256 marketId = 1 + (marketSeed % sm.marketCount());
         vm.prank(keeper);
-        uint256 id = sm.createRound(d, bc, st, et);
+        uint256 id = sm.createRound(marketId, d, bc, st, bytes("sig"));
         rounds.push(id);
     }
 
@@ -90,7 +100,7 @@ contract Handler is Test {
     }
 
     function warp(uint32 secs) external {
-        vm.warp(block.timestamp + bound(secs, 1, 45 minutes));
+        vm.warp(block.timestamp + bound(secs, 1, 12 minutes));
     }
 
     /// @dev Rarely jump past CLAIM_WINDOW so window-sweeps (forfeited winnings) get exercised.
@@ -108,24 +118,36 @@ contract Handler is Test {
         // never skip an open betting window; only time itself (warp) may close it
         if (block.timestamp < r.bettingCloses) return;
         if (block.timestamp < r.startTime) vm.warp(r.startTime);
-        if (block.timestamp > r.startTime + sm.LIVENESS_GRACE()) return;
-        vm.prank(keeper);
-        sm.lockRound(id, bound(price, 1, 1e12));
+        if (block.timestamp > r.startTime + sm.SETTLE_WINDOW()) return;
+        _tick(id, bound(price, 1, 1e12));
+        vm.prank(_actor(rSeed)); // permissionless
+        sm.lockRound(id);
+    }
+
+    /// @dev Newest Locked round among the last few (resolution is what the keeper does most).
+    function _latestLocked() internal view returns (uint256 id, bool ok) {
+        uint256 n = rounds.length;
+        for (uint256 k = 0; k < 4 && k < n; k++) {
+            uint256 cand = rounds[n - 1 - k];
+            if (sm.getRound(cand).status == SmartMoneyRounds.Status.Locked) return (cand, true);
+        }
+        return (0, false);
     }
 
     function resolve(uint256 rSeed, uint96 price) external {
-        (uint256 id, bool ok) = _round(rSeed);
+        (uint256 id, bool ok) = rSeed % 4 == 0 ? _round(rSeed) : _latestLocked();
         if (!ok) return;
         SmartMoneyRounds.Round memory r = sm.getRound(id);
         if (r.status != SmartMoneyRounds.Status.Locked) return;
         if (block.timestamp < r.endTime) vm.warp(r.endTime);
-        if (block.timestamp > r.endTime + sm.LIVENESS_GRACE()) return;
+        if (block.timestamp > r.endTime + sm.SETTLE_WINDOW()) return;
         if (r.rightPool == 0 || r.wrongPool == 0) ghostOneSided++;
         // bias towards ties sometimes to exercise the void path
         uint256 p = price % 7 == 0 ? r.startPrice : bound(price, 1, 1e12);
         if (p == r.startPrice) ghostTie++;
-        vm.prank(keeper);
-        sm.resolveRound(id, p);
+        _tick(id, p);
+        vm.prank(_actor(rSeed)); // permissionless
+        sm.resolveRound(id);
         _countOutcome(id);
     }
 
@@ -147,7 +169,7 @@ contract Handler is Test {
         (uint256 id, bool ok) = _round(rSeed);
         if (!ok) return;
         SmartMoneyRounds.Status s = sm.getRound(id).status;
-        if (s != SmartMoneyRounds.Status.Open && s != SmartMoneyRounds.Status.Locked) return;
+        if (s != SmartMoneyRounds.Status.Open) return; // keeper can only void before lock
         vm.prank(keeper);
         sm.voidRound(id);
         ghostVoided++;
@@ -158,8 +180,8 @@ contract Handler is Test {
         (uint256 id, bool ok) = _round(rSeed);
         if (!ok) return;
         SmartMoneyRounds.Round memory r = sm.getRound(id);
-        bool can = (r.status == SmartMoneyRounds.Status.Open && block.timestamp > r.startTime + sm.LIVENESS_GRACE())
-            || (r.status == SmartMoneyRounds.Status.Locked && block.timestamp > r.endTime + sm.LIVENESS_GRACE());
+        bool can = (r.status == SmartMoneyRounds.Status.Open && block.timestamp > r.startTime + sm.SETTLE_WINDOW())
+            || (r.status == SmartMoneyRounds.Status.Locked && block.timestamp > r.endTime + sm.SETTLE_WINDOW());
         if (!can) return;
         sm.voidStaleRound(id);
         ghostVoided++;
@@ -209,17 +231,17 @@ contract Handler is Test {
         SmartMoneyRounds.Round memory r = sm.getRound(id);
         if (r.status == SmartMoneyRounds.Status.Open) {
             if (block.timestamp < r.bettingCloses) return; // see lock()
-            if (block.timestamp > r.startTime + sm.LIVENESS_GRACE()) return;
+            if (block.timestamp > r.startTime + sm.SETTLE_WINDOW()) return;
             if (block.timestamp < r.startTime) vm.warp(r.startTime);
-            vm.prank(keeper);
-            sm.lockRound(id, bound(p0, 1, 1e12));
+            _tick(id, bound(p0, 1, 1e12));
+            sm.lockRound(id);
             r = sm.getRound(id);
         }
         if (r.status == SmartMoneyRounds.Status.Locked) {
-            if (block.timestamp > r.endTime + sm.LIVENESS_GRACE()) return;
+            if (block.timestamp > r.endTime + sm.SETTLE_WINDOW()) return;
             if (block.timestamp < r.endTime) vm.warp(r.endTime);
-            vm.prank(keeper);
-            sm.resolveRound(id, bound(p1, 1, 1e12));
+            _tick(id, bound(p1, 1, 1e12));
+            sm.resolveRound(id);
             _countOutcome(id);
             r = sm.getRound(id);
         }
@@ -256,8 +278,14 @@ contract SmartMoneyRoundsInvariantTest is Test {
 
     function setUp() public {
         vm.warp(1_800_000_000);
-        sm = new SmartMoneyRounds(owner, keeper, treasury, 200, 0.01 ether);
-        handler = new Handler(sm, keeper, owner);
+        MockOracle oracle = new MockOracle();
+        sm = new SmartMoneyRounds(owner, keeper, treasury, 200, 0.01 ether, oracle, 20 minutes);
+        vm.startPrank(owner);
+        sm.addMarket("BTC", 16, 1 hours);
+        sm.addMarket("BTC", 16, 15 minutes);
+        sm.addMarket("ETH", 32, 1 hours);
+        vm.stopPrank();
+        handler = new Handler(sm, oracle, keeper, owner);
         targetContract(address(handler));
     }
 
@@ -312,6 +340,47 @@ contract SmartMoneyRoundsInvariantTest is Test {
             outstanding += pool - r.claimedTotal - r.fee - r.dust;
         }
         assertEq(address(sm).balance, sm.treasuryBalance() + outstanding, "balance != treasury + obligations");
+    }
+
+    /// @notice Track-record counters always match the settled rounds, and user stats match flows.
+    function invariant_statsConsistent() public view {
+        uint256 n = handler.roundsLength();
+        uint256 resolvedRight;
+        uint256 resolvedWrong;
+        uint256 voided;
+        for (uint256 i = 0; i < n; i++) {
+            SmartMoneyRounds.Round memory r = sm.getRound(handler.rounds(i));
+            if (r.status == SmartMoneyRounds.Status.Voided) {
+                voided++;
+            } else if (r.status == SmartMoneyRounds.Status.Resolved) {
+                bool smRight = r.winner == SmartMoneyRounds.Side.Right;
+                if (smRight) resolvedRight++;
+                else resolvedWrong++;
+            }
+        }
+        uint256 sRight;
+        uint256 sWrong;
+        uint256 sVoided;
+        for (uint256 m = 1; m <= sm.marketCount(); m++) {
+            (uint32 a, uint32 b, uint32 c) = sm.marketStats(m);
+            sRight += a;
+            sWrong += b;
+            sVoided += c;
+        }
+        assertEq(sRight, resolvedRight, "right counter");
+        assertEq(sWrong, resolvedWrong, "wrong counter");
+        assertEq(sVoided, voided, "voided counter");
+
+        uint256 staked;
+        uint256 returned;
+        uint256 m2 = handler.actorsLength();
+        for (uint256 j = 0; j < m2; j++) {
+            (uint128 s, uint128 ret,,) = sm.userStats(handler.actors(j));
+            staked += s;
+            returned += ret;
+        }
+        assertEq(staked, handler.ghostDeposited(), "staked != deposits");
+        assertEq(returned, handler.ghostPaidOut(), "returned != payouts");
     }
 
     /// @notice Money in == money out + money still inside.
