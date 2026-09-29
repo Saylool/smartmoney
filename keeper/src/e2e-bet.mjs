@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createWalletClient, http, parseEther, formatEther } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { publicClient, walletClient, monadTestnet, RPC_URL, ROOT } from "./chain.mjs";
+import { publicClient, walletClient, gasFor, monadTestnet, RPC_URL, ROOT } from "./chain.mjs";
 
 const roundId = BigInt(process.argv[2]);
 const amount = parseEther(process.argv[3] ?? "0.05");
@@ -26,7 +26,8 @@ for (const side of [1, 2]) {
   for (let i = 0; i < 8; i++) {
     await new Promise((r) => setTimeout(r, 3000)); // Monad checks balances on slightly delayed state
     try {
-      const tx = await w.writeContract({ address: dep.address, abi, functionName: "bet", args: [roundId, side], value: amount });
+      const req = { address: dep.address, abi, functionName: "bet", args: [roundId, side], value: amount };
+      const tx = await w.writeContract({ ...req, gas: await gasFor({ ...req, account: a }) });
       const rc = await publicClient.waitForTransactionReceipt({ hash: tx });
       console.log(`${a.address} bet ${formatEther(amount)} on ${side === 1 ? "RIGHT" : "WRONG"}: ${rc.status}`);
       break;

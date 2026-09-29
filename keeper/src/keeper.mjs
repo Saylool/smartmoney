@@ -9,7 +9,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { BaseError, ContractFunctionRevertedError, formatEther } from "viem";
-import { publicClient, walletClient, ROOT } from "./chain.mjs";
+import { publicClient, walletClient, gasFor, ROOT } from "./chain.mjs";
 import { MARKETS } from "./markets.mjs";
 import { snapshot, signalFor } from "./signal.mjs";
 
@@ -48,7 +48,8 @@ async function write(label, functionName, args) {
   } catch (e) {
     return { ok: false, reason: revertName(e) };
   }
-  const hash = await client.writeContract({ ...sm, functionName, args });
+  const gas = await gasFor({ ...sm, functionName, args, account });
+  const hash = await client.writeContract({ ...sm, functionName, args, gas });
   const rc = await publicClient.waitForTransactionReceipt({ hash });
   log(`${label} -> ${rc.status} ${hash}`);
   return { ok: rc.status === "success", hash };

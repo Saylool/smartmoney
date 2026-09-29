@@ -3,7 +3,8 @@
 import { useEffect } from "react";
 import { zeroAddress } from "viem";
 import { useAccount, useReadContracts, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { fmtMon, smartMoney, type RoundWithId } from "@/lib/contract";
+import { useState } from "react";
+import { fmtMon, gasForClaim, smartMoney, type RoundWithId } from "@/lib/contract";
 import { marketById } from "@/lib/config";
 import { TxStatus } from "./TxStatus";
 
@@ -17,6 +18,7 @@ export function MyClaims({ rounds }: { rounds: RoundWithId[] }) {
     query: { enabled: !!address && settled.length > 0 },
   });
   const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+  const [gasError, setGasError] = useState<Error | null>(null);
   const { isLoading: confirming, isSuccess } = useWaitForTransactionReceipt({ hash });
   useEffect(() => {
     if (isSuccess) refetch();
@@ -38,16 +40,22 @@ export function MyClaims({ rounds }: { rounds: RoundWithId[] }) {
           </span>
           <button
             disabled={isPending || confirming}
-            onClick={() => {
+            onClick={async () => {
               reset();
-              writeContract({ ...smartMoney, functionName: "claim", args: [r.id] });
+              setGasError(null);
+              try {
+                const gas = await gasForClaim(r.id, address);
+                writeContract({ ...smartMoney, functionName: "claim", args: [r.id], gas });
+              } catch (e) {
+                setGasError(e as Error);
+              }
             }}
           >
             Claim {fmtMon(amount!)} MON
           </button>
         </div>
       ))}
-      <TxStatus hash={hash} pending={isPending} confirming={confirming} success={isSuccess} error={error} />
+      <TxStatus hash={hash} pending={isPending} confirming={confirming} success={isSuccess} error={error ?? gasError} />
     </section>
   );
 }

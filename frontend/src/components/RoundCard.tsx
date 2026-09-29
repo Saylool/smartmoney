@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { parseEther, zeroAddress } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import {
-  Direction, Side, Status, directionLabel, fmtMon, fmtPrice, multiple, phaseOf, smartMoney, smartMoneyWinning,
+  Direction, Side, Status, directionLabel, fmtMon, fmtPrice, gasForBet, gasForClaim, multiple, phaseOf, smartMoney,
+  smartMoneyWinning,
   type RoundWithId,
 } from "@/lib/contract";
 import { marketById } from "@/lib/config";
@@ -64,14 +65,28 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
   }
   const tooSmall = parsed !== null && typeof minBet === "bigint" && parsed < minBet;
 
-  const bet = (side: Side) => {
-    if (!parsed || tooSmall) return;
+  const [gasError, setGasError] = useState<Error | null>(null);
+  const bet = async (side: Side) => {
+    if (!parsed || tooSmall || !address) return;
     reset();
-    writeContract({ ...smartMoney, functionName: "bet", args: [round.id, side], value: parsed });
+    setGasError(null);
+    try {
+      const gas = await gasForBet(round.id, side, parsed, address);
+      writeContract({ ...smartMoney, functionName: "bet", args: [round.id, side], value: parsed, gas });
+    } catch (e) {
+      setGasError(e as Error);
+    }
   };
-  const claim = () => {
+  const claim = async () => {
+    if (!address) return;
     reset();
-    writeContract({ ...smartMoney, functionName: "claim", args: [round.id] });
+    setGasError(null);
+    try {
+      const gas = await gasForClaim(round.id, address);
+      writeContract({ ...smartMoney, functionName: "claim", args: [round.id], gas });
+    } catch (e) {
+      setGasError(e as Error);
+    }
   };
 
   const pos = position as { right: bigint; wrong: bigint; claimed: boolean } | undefined;
@@ -188,7 +203,7 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
         </div>
       )}
 
-      <TxStatus hash={hash} pending={isPending} confirming={confirming} success={isSuccess} error={error} />
+      <TxStatus hash={hash} pending={isPending} confirming={confirming} success={isSuccess} error={error ?? gasError} />
 
       {!compact && (
         <div className="row between center" style={{ marginTop: 10 }}>

@@ -116,3 +116,19 @@ export async function fetchSignal(roundId: bigint, createdBlock: bigint): Promis
   if (!data) return null;
   return JSON.parse(hexToString(data)) as Signal;
 }
+
+// ---------------------------------------------------------------- gas
+// Monad bills the gas LIMIT. viem/wallets may fill the limit via eth_fillTransaction, which Monad
+// testnet answers with ~1M gas (≈0.18 MON). We estimate with eth_estimateGas (+20 %) and pass it.
+
+const withBuffer = (g: bigint) => (g * 12n) / 10n;
+
+export async function gasForBet(roundId: bigint, side: Side, value: bigint, account: Address) {
+  return withBuffer(
+    await publicClient.estimateContractGas({ ...smartMoney, functionName: "bet", args: [roundId, side], value, account }),
+  );
+}
+
+export async function gasForClaim(roundId: bigint, account: Address) {
+  return withBuffer(await publicClient.estimateContractGas({ ...smartMoney, functionName: "claim", args: [roundId], account }));
+}

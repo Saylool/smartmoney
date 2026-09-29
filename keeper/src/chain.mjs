@@ -30,3 +30,15 @@ export function walletClient() {
 }
 
 export const ROOT = resolve(here, "../..");
+
+/**
+ * Explicit gas limit: eth_estimateGas + 20 %. Monad bills the gas LIMIT, and viem otherwise fills the
+ * limit via eth_fillTransaction, which Monad testnet answers with a ~1M-gas figure.
+ */
+export async function gasFor(params) {
+  // Pass the account as a plain address: with a local account object viem also routes the estimate
+  // through eth_fillTransaction.
+  const from = typeof params.account === "string" ? params.account : params.account.address;
+  const est = await publicClient.estimateContractGas({ ...params, account: from });
+  return (est * 12n) / 10n;
+}
