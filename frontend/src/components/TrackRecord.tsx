@@ -5,6 +5,7 @@ import { useReadContracts } from "wagmi";
 import { MARKETS } from "@/lib/config";
 import { smartMoney } from "@/lib/contract";
 import { useI18n } from "@/lib/i18n";
+import { HistoryStrip } from "./ActivityFeed";
 
 type Backtest = {
   days: number;
@@ -45,6 +46,7 @@ export function TrackRecord() {
         })}
       </div>
       <p className="small muted">{t.liveRecord}</p>
+      <HistoryStrip />
       {bt && (
         <>
           <div className="stats-grid" style={{ marginTop: 12 }}>

@@ -35,7 +35,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
         <div style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, display: "flex", background: "linear-gradient(90deg, rgba(11,13,18,0.95) 0%, rgba(11,13,18,0.8) 45%, rgba(11,13,18,0.1) 100%)" }} />
         <div style={{ display: "flex", alignItems: "center", fontSize: 36, color: "#836ef9", fontWeight: 700 }}>
           <div style={{ width: 26, height: 26, background: "#836ef9", transform: "rotate(45deg)", marginRight: 20 }} />
-          SmartMoney · Round #{id}
+          Tail or Fade · Round #{id}
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", fontSize: 40, color: "#8b95a9" }}>Perpl&apos;s top 20 traders are</div>

@@ -12,10 +12,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const r = (await publicClient.readContract({ ...smartMoney, functionName: "getRound", args: [BigInt(id)] })) as unknown as Round;
     const m = marketById(r.marketId);
     const dir = r.direction === Direction.Long ? "LONG" : "SHORT";
-    const title = `Smart money is ${dir} ${m.symbol} — right or wrong? · SmartMoney #${id}`;
+    const title = `Smart money is ${dir} ${m.symbol} — right or wrong? · Tail or Fade #${id}`;
     return { title, description: "Bet on whether Perpl's top 20 traders are right. Parimutuel rounds on Monad.", openGraph: { title }, twitter: { card: "summary_large_image", title } };
   } catch {
-    return { title: `Round #${id} · SmartMoney` };
+    return { title: `Round #${id} · Tail or Fade` };
   }
 }
 

@@ -187,3 +187,24 @@ footer { margin-top: 24px; word-break: break-all; }
 .lang { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: rgba(11, 13, 18, 0.4); }
 .lang button { background: transparent; color: var(--muted); border-radius: 0; padding: 8px 10px; font-size: 12px; letter-spacing: 0.06em; }
 .lang button.on { background: rgba(131, 110, 249, 0.25); color: var(--text); }
+
+/* Envio-powered activity */
+.envio-badge { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #cfc6ff; border: 1px solid rgba(131, 110, 249, 0.4); border-radius: 999px; padding: 3px 10px; }
+.envio-badge:hover { text-decoration: none; background: rgba(131, 110, 249, 0.15); }
+.totals { margin-bottom: 14px; }
+.feed { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto; }
+.feed-row { display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--border); }
+.feed-row .grow { flex: 1; min-width: 0; }
+.nowrap { white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(52, 211, 153, 0.7); }
+.dot.error { background: var(--red); box-shadow: 0 0 8px rgba(248, 113, 113, 0.7); }
+.dot.accent { background: var(--accent); }
+.history { margin-top: 16px; }
+.history-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.history-label { width: 110px; flex: none; color: var(--muted); }
+.pips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pip { width: 12px; height: 12px; border-radius: 3px; background: var(--border); }
+.pip.right { background: var(--green); }
+.pip.wrong { background: var(--red); }
+.pip.void { background: #3a4252; }

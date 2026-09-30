@@ -1,8 +1,8 @@
-# SmartMoney
+# Tail or Fade
 
 **Perpl's top 20 traders just picked a side. Are they right?**
 
-Every round, SmartMoney reads the open positions of the 20 most profitable traders on
+Every round, Tail or Fade reads the open positions of the 20 most profitable traders on
 [Perpl](https://app.perpl.xyz) (Monad's on-chain perps exchange) over the last 30 days and publishes their
 net direction on-chain. Players bet that smart money is **right** or **wrong**. The contract reads the start
 and end price from Perpl's on-chain oracle itself, anyone can settle a round, and winners split the pool.
@@ -27,6 +27,10 @@ Built for **Monad Metropolis, Track 01**.
   lock and resolve; if nobody does within 20 minutes, anyone can void and everyone is refunded.
 - **Monad-native.** 15-minute rounds, per-round signals of about 1.5 KB emitted as events, and a UI that
   polls live oracle prices every few seconds are cheap and fast on Monad.
+- **Full history with Envio.** The public Monad RPC caps `eth_getLogs` at ~100 blocks, so a browser can't see
+  past bets or results. The app's `/api/activity` route pulls every contract event since deployment from
+  **Envio HyperSync** and powers the live activity feed, protocol totals (bets, volume, players) and the
+  round-by-round track record strip. See [Envio integration](#envio-integration).
 - **An honest market.** Our 7-day backtest shows smart money is right about half the time over one hour
   (BTC 50.6%, ETH 47%, SOL 51.8%), even with a selection bias in its favour. That is what makes
   "right or wrong?" a genuinely open question.
@@ -73,6 +77,20 @@ stateDiagram-v2
   Resolved --> [*]: winners claim, dust swept to treasury
   Voided --> [*]: everyone claims a full refund
 ```
+
+## Envio integration
+
+| | |
+| --- | --- |
+| Service | Envio **HyperSync** (`https://monad-testnet.hypersync.xyz`, chain 10143) |
+| Code | [`frontend/src/lib/envio.ts`](frontend/src/lib/envio.ts), [`frontend/src/app/api/activity/route.ts`](frontend/src/app/api/activity/route.ts) |
+| Data | `RoundCreated`, `BetPlaced`, `RoundLocked`, `RoundResolved`, `RoundVoided`, `Claimed` since the deploy block, paged by `next_block`, decoded with viem |
+| Features | Live activity feed, protocol totals, per-market round-by-round history (home page and track record) |
+| Caching | Edge-cached 15 s, so all visitors share one HyperSync request |
+| Config | `ENVIO_API_TOKEN` (server-side env var, from https://app.envio.dev/api-tokens) |
+
+Without HyperSync these features are impossible from the browser: the Monad testnet RPC answers
+`eth_getLogs` only for ~100-block ranges and 15 requests/second.
 
 ## Repository
 

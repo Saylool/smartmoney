@@ -9,7 +9,7 @@ export function Header() {
   return (
     <header className="site-header">
       <Link href="/" className="brand">
-        <span className="logo" aria-hidden>◆</span> SmartMoney
+        <span className="logo" aria-hidden>◆</span> Tail or Fade
       </Link>
       <nav className="nav">
         <Link href="/">{t.navRounds}</Link>

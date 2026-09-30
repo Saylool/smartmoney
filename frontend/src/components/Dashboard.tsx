@@ -9,6 +9,7 @@ import { RoundCard } from "./RoundCard";
 import { SignalPanel } from "./SignalPanel";
 import { TrackRecord } from "./TrackRecord";
 import { MyClaims } from "./MyClaims";
+import { ActivityFeed } from "./ActivityFeed";
 import { useI18n } from "@/lib/i18n";
 
 function LivePrice({ marketId }: { marketId: number }) {
@@ -107,6 +108,7 @@ export function Dashboard() {
       {betting.map((r) => <RoundCard key={r.id.toString()} round={r} />)}
       {live.map((r) => <RoundCard key={r.id.toString()} round={r} />)}
       {featured && <SignalPanel round={featured} />}
+      <ActivityFeed />
       <Results rounds={done} />
       <TrackRecord />
     </>

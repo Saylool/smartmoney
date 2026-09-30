@@ -12,10 +12,10 @@ const description = "Perpl's top 20 traders just picked a side. Bet on whether s
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "SmartMoney — is smart money right?",
+  title: "Tail or Fade — is smart money right?",
   description,
   openGraph: {
-    title: "SmartMoney — is smart money right?",
+    title: "Tail or Fade — is smart money right?",
     description,
     images: [{ url: "/img/og.jpg", width: 1200, height: 630 }],
   },

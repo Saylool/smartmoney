@@ -33,7 +33,7 @@ const en = {
   pt1: "traders, read on-chain",
   pt2: "fastest rounds",
   pt3: "prices typed by humans",
-  footer: (net: string) => `on ${net}. Testnet MON only, no real value. Artwork generated with Higgsfield.`,
+  footer: (net: string) => `on ${net}. Testnet MON only, no real value. Artwork generated with Higgsfield, history indexed by Envio.`,
   contract: "Contract",
 
   // markets
@@ -154,9 +154,27 @@ const en = {
   thWins: "Wins",
 
   // share
-  shareOpen: (dir: string, sym: string) => `Perpl's top 20 traders are ${dir} ${sym}. Are they right? Bet on it on SmartMoney @monad`,
+  shareOpen: (dir: string, sym: string) => `Perpl's top 20 traders are ${dir} ${sym}. Are they right? Tail or fade them on @monad`,
   shareDone: (dir: string, sym: string, right: boolean) =>
-    `Perpl's top 20 traders went ${dir} ${sym} and were ${right ? "RIGHT" : "WRONG"}. Called it on SmartMoney @monad`,
+    `Perpl's top 20 traders went ${dir} ${sym} and were ${right ? "RIGHT" : "WRONG"}. Called it on Tail or Fade @monad`,
+
+  // envio
+  poweredBy: "Indexed by Envio HyperSync",
+  liveActivity: "Live activity",
+  actBet: (who: string, amt: string, right: boolean) => `${who} bet ${amt} MON that smart money is ${right ? "RIGHT" : "WRONG"}`,
+  actClaim: (who: string, amt: string) => `${who} claimed ${amt} MON`,
+  actResolved: (right: boolean) => `Smart money was ${right ? "RIGHT" : "WRONG"}`,
+  actVoided: (reason: string) => `Round refunded (${reason === "one-sided" ? "one side empty" : reason === "tie" ? "price unchanged" : reason})`,
+  actCreated: (dir: string) => `New round: smart money is ${dir}`,
+  ago: (secs: number) => (secs < 60 ? `${secs}s ago` : secs < 3600 ? `${Math.floor(secs / 60)}m ago` : secs < 86400 ? `${Math.floor(secs / 3600)}h ago` : `${Math.floor(secs / 86400)}d ago`),
+  noActivity: "No bets yet. The first one shows up here within seconds.",
+  totBets: "Bets placed",
+  totVolume: "Volume",
+  totPlayers: "Players",
+  totRounds: "Rounds settled",
+  historyTitle: "Round by round",
+  historyLegend: "green = smart money right · red = wrong · grey = refunded",
+  envioOff: "Full history needs an Envio API token (ENVIO_API_TOKEN).",
 };
 
 export type Dict = typeof en;
@@ -188,7 +206,7 @@ const tr: Dict = {
   pt1: "trader, zincirden okunur",
   pt2: "en hızlı round",
   pt3: "elle girilen fiyat",
-  footer: (net) => `(${net}). Yalnızca testnet MON, gerçek değeri yok. Görseller Higgsfield ile üretildi.`,
+  footer: (net) => `(${net}). Yalnızca testnet MON, gerçek değeri yok. Görseller Higgsfield ile üretildi, geçmiş Envio ile indekslendi.`,
   contract: "Kontrat",
 
   marketLabel: (sym, dur) => `${sym} · ${dur >= 3600 ? `${dur / 3600} saat` : `${dur / 60} dk`}`,
@@ -300,9 +318,26 @@ const tr: Dict = {
   thBets: "Bahis",
   thWins: "Kazanç",
 
-  shareOpen: (dir, sym) => `Perpl'ın en iyi 20 trader'ı ${sym}'de ${dir}. Haklılar mı? SmartMoney'de bahis yap @monad`,
+  shareOpen: (dir, sym) => `Perpl'ın en iyi 20 trader'ı ${sym}'de ${dir}. Haklılar mı? Tail or Fade'de bahis yap @monad`,
   shareDone: (dir, sym, right) =>
-    `Perpl'ın en iyi 20 trader'ı ${sym}'de ${dir} gitti ve ${right ? "HAKLI" : "HAKSIZ"} çıktı. SmartMoney'de bildim @monad`,
+    `Perpl'ın en iyi 20 trader'ı ${sym}'de ${dir} gitti ve ${right ? "HAKLI" : "HAKSIZ"} çıktı. Tail or Fade'de bildim @monad`,
+
+  poweredBy: "Envio HyperSync ile indekslendi",
+  liveActivity: "Canlı aktivite",
+  actBet: (who, amt, right) => `${who}, smart money ${right ? "HAKLI" : "HAKSIZ"} diye ${amt} MON yatırdı`,
+  actClaim: (who, amt) => `${who} ${amt} MON çekti`,
+  actResolved: (right) => `Smart money ${right ? "HAKLI" : "HAKSIZ"} çıktı`,
+  actVoided: (reason) => `Round iade edildi (${reason === "one-sided" ? "bir taraf boş" : reason === "tie" ? "fiyat değişmedi" : reason})`,
+  actCreated: (dir) => `Yeni round: smart money ${dir}`,
+  ago: (secs) => (secs < 60 ? `${secs} sn önce` : secs < 3600 ? `${Math.floor(secs / 60)} dk önce` : secs < 86400 ? `${Math.floor(secs / 3600)} sa önce` : `${Math.floor(secs / 86400)} gün önce`),
+  noActivity: "Henüz bahis yok. İlk bahis birkaç saniye içinde burada görünür.",
+  totBets: "Bahis sayısı",
+  totVolume: "Hacim",
+  totPlayers: "Oyuncu",
+  totRounds: "Sonuçlanan round",
+  historyTitle: "Round round",
+  historyLegend: "yeşil = smart money haklı · kırmızı = haksız · gri = iade",
+  envioOff: "Tüm geçmiş için Envio API anahtarı gerekli (ENVIO_API_TOKEN).",
 };
 
 const DICTS: Record<Lang, Dict> = { en, tr };
