@@ -1,4 +1,6 @@
 import { ImageResponse } from "next/og";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { formatEther } from "viem";
 import { Direction, Side, Status, publicClient, smartMoney, type Round } from "@/lib/contract";
 import { marketById } from "@/lib/config";
@@ -6,6 +8,7 @@ import { marketById } from "@/lib/config";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 export const revalidate = 60;
+export const runtime = "nodejs";
 
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,9 +26,13 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     : r?.status === Status.Voided ? "Round refunded"
     : "Right or wrong? Place your bet.";
 
+  const art = await readFile(join(process.cwd(), "public/img/og.jpg")).then((b) => `data:image/jpeg;base64,${b.toString("base64")}`).catch(() => null);
+
   return new ImageResponse(
     (
-      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#0b0d12", color: "#e8ecf4", padding: 64, fontFamily: "sans-serif" }}>
+      <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", background: "#0b0d12", color: "#e8ecf4", padding: 64, fontFamily: "sans-serif", position: "relative" }}>
+        {art && <img src={art} width={1200} height={630} style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630 }} alt="" />}
+        <div style={{ position: "absolute", top: 0, left: 0, width: 1200, height: 630, display: "flex", background: "linear-gradient(90deg, rgba(11,13,18,0.95) 0%, rgba(11,13,18,0.8) 45%, rgba(11,13,18,0.1) 100%)" }} />
         <div style={{ display: "flex", alignItems: "center", fontSize: 36, color: "#836ef9", fontWeight: 700 }}>
           <div style={{ width: 26, height: 26, background: "#836ef9", transform: "rotate(45deg)", marginRight: 20 }} />
           SmartMoney · Round #{id}
