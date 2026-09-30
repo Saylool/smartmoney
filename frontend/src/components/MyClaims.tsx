@@ -7,8 +7,10 @@ import { useState } from "react";
 import { fmtMon, gasForClaim, smartMoney, type RoundWithId } from "@/lib/contract";
 import { marketById } from "@/lib/config";
 import { TxStatus } from "./TxStatus";
+import { useI18n } from "@/lib/i18n";
 
 export function MyClaims({ rounds }: { rounds: RoundWithId[] }) {
+  const { t } = useI18n();
   const { address } = useAccount();
   const settled = rounds.filter((r) => r.status >= 3);
   const { data, refetch } = useReadContracts({
@@ -32,11 +34,11 @@ export function MyClaims({ rounds }: { rounds: RoundWithId[] }) {
 
   return (
     <section className="panel highlight">
-      <h2>Ready to claim</h2>
+      <h2>{t.readyToClaim}</h2>
       {items.map(({ r, amount }) => (
         <div key={r.id.toString()} className="row between center claim-row">
           <span className="small">
-            Round #{r.id.toString()} · {marketById(r.marketId).label} · {r.status === 4 ? "refund" : "winnings"}
+            {t.round(r.id.toString())} · {t.marketLabel(marketById(r.marketId).symbol, marketById(r.marketId).duration)} · {r.status === 4 ? t.refund : t.winnings}
           </span>
           <button
             disabled={isPending || confirming}
@@ -51,7 +53,7 @@ export function MyClaims({ rounds }: { rounds: RoundWithId[] }) {
               }
             }}
           >
-            Claim {fmtMon(amount!)} MON
+            {t.claim(fmtMon(amount!))}
           </button>
         </div>
       ))}

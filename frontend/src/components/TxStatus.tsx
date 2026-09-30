@@ -1,16 +1,18 @@
 "use client";
 
 import { EXPLORER } from "@/lib/config";
+import { useI18n } from "@/lib/i18n";
 
 type Props = { hash?: `0x${string}`; pending: boolean; confirming: boolean; success: boolean; error: Error | null };
 
 export function TxStatus({ hash, pending, confirming, success, error }: Props) {
-  if (pending) return <div className="small muted">Confirm in your wallet…</div>;
-  if (confirming) return <div className="small muted">Confirming on Monad…</div>;
+  const { t } = useI18n();
+  if (pending) return <div className="small muted">{t.txConfirmWallet}</div>;
+  if (confirming) return <div className="small muted">{t.txConfirming}</div>;
   if (success && hash)
     return (
       <div className="small ok">
-        Confirmed. <a href={`${EXPLORER}/tx/${hash}`} target="_blank" rel="noreferrer">View transaction</a>
+        {t.txConfirmed} <a href={`${EXPLORER}/tx/${hash}`} target="_blank" rel="noreferrer">{t.txView}</a>
       </div>
     );
   if (error) {
@@ -22,7 +24,7 @@ export function TxStatus({ hash, pending, confirming, success, error }: Props) {
         {msg.split("\n")[0]}
         {justFunded && (
           <div className="muted">
-            If you just received MON, Monad needs a few seconds before it can be spent. Wait a moment and try again.
+            {t.txJustFunded}
           </div>
         )}
       </div>

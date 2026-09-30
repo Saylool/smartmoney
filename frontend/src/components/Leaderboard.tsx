@@ -4,10 +4,12 @@ import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import { formatEther, type Address } from "viem";
 import { EXPLORER } from "@/lib/config";
 import { fmtMon, smartMoney } from "@/lib/contract";
+import { useI18n } from "@/lib/i18n";
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export function Leaderboard() {
+  const { t } = useI18n();
   const { address } = useAccount();
   const { data: list, isLoading } = useReadContract({ ...smartMoney, functionName: "participants", args: [0n, 500n] });
   const people = (list as readonly Address[] | undefined) ?? [];
@@ -28,24 +30,21 @@ export function Leaderboard() {
 
   return (
     <section className="panel">
-      <h2>Who beats smart money?</h2>
-      <p className="small muted">
-        Net = everything claimed (winnings and refunds) minus everything staked, straight from the contract. Stakes in
-        rounds that have not settled yet count against you until you claim.
-      </p>
-      {isLoading && <div className="muted small">Loading…</div>}
-      {!isLoading && rows.length === 0 && <div className="muted small">No bets yet. Be the first.</div>}
+      <h2>{t.whoBeats}</h2>
+      <p className="small muted">{t.lbNote}</p>
+      {isLoading && <div className="muted small">{t.loading}</div>}
+      {!isLoading && rows.length === 0 && <div className="muted small">{t.noBets}</div>}
       {rows.length > 0 && (
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>#</th>
-                <th>Player</th>
-                <th className="num">Net (MON)</th>
-                <th className="num">Staked</th>
-                <th className="num">Bets</th>
-                <th className="num">Wins</th>
+                <th>{t.thPlayer}</th>
+                <th className="num">{t.thNet}</th>
+                <th className="num">{t.thStaked}</th>
+                <th className="num">{t.thBets}</th>
+                <th className="num">{t.thWins}</th>
               </tr>
             </thead>
             <tbody>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useNow } from "@/lib/hooks";
+import { useI18n } from "@/lib/i18n";
 
 export function fmtDuration(secs: number) {
   if (secs <= 0) return "0:00";
@@ -12,11 +13,12 @@ export function fmtDuration(secs: number) {
 
 export function Countdown({ to, prefix, done }: { to: bigint | number; prefix: string; done?: string }) {
   const now = useNow();
+  const { t } = useI18n();
   const diff = Number(to) - now;
-  if (diff <= 0) return <span className="muted small">{done ?? `${prefix} now`}</span>;
+  if (diff <= 0) return <span className="muted small">{done ?? `${prefix} ${t.now}`}</span>;
   return (
     <span className="small">
-      {prefix} in <span className="mono strong">{fmtDuration(diff)}</span>
+      {prefix}{t.inWord ? ` ${t.inWord}` : ""} <span className="mono strong">{fmtDuration(diff)}</span>
     </span>
   );
 }

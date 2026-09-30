@@ -9,31 +9,34 @@ import { RoundCard } from "./RoundCard";
 import { SignalPanel } from "./SignalPanel";
 import { TrackRecord } from "./TrackRecord";
 import { MyClaims } from "./MyClaims";
+import { useI18n } from "@/lib/i18n";
 
 function LivePrice({ marketId }: { marketId: number }) {
+  const { t } = useI18n();
   const { price } = useLivePrice(marketId);
   const m = marketById(marketId);
   return (
     <span className="small muted">
-      {m.symbol} oracle price <span className="mono">{price !== undefined ? `$${fmtPrice(price, marketId)}` : "…"}</span>
+      {t.oraclePrice(m.symbol)} <span className="mono">{price !== undefined ? `$${fmtPrice(price, marketId)}` : "…"}</span>
     </span>
   );
 }
 
 function Results({ rounds }: { rounds: RoundWithId[] }) {
+  const { t } = useI18n();
   if (rounds.length === 0) return null;
   return (
     <section className="panel">
-      <h2>Recent results</h2>
+      <h2>{t.recentResults}</h2>
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Round</th>
-              <th>Smart money</th>
-              <th className="num">Start</th>
-              <th className="num">End</th>
-              <th>Result</th>
+              <th>{t.thRound}</th>
+              <th>{t.thSmartMoney}</th>
+              <th className="num">{t.thStart}</th>
+              <th className="num">{t.thEnd}</th>
+              <th>{t.thResult}</th>
             </tr>
           </thead>
           <tbody>
@@ -45,9 +48,9 @@ function Results({ rounds }: { rounds: RoundWithId[] }) {
                 <td className="num mono">{r.endPrice > 0n ? fmtPrice(r.endPrice, r.marketId) : "—"}</td>
                 <td>
                   {r.status === Status.Resolved ? (
-                    <span className={r.winner === Side.Right ? "ok" : "error"}>{r.winner === Side.Right ? "Right" : "Wrong"}</span>
+                    <span className={r.winner === Side.Right ? "ok" : "error"}>{r.winner === Side.Right ? t.resRight : t.resWrong}</span>
                   ) : (
-                    <span className="muted">Refunded</span>
+                    <span className="muted">{t.resRefunded}</span>
                   )}
                 </td>
               </tr>
@@ -60,6 +63,7 @@ function Results({ rounds }: { rounds: RoundWithId[] }) {
 }
 
 export function Dashboard() {
+  const { t } = useI18n();
   const [marketId, setMarketId] = useState<number>(MARKETS[0].id);
   const now = useNow();
   const { rounds, isLoading, error } = useRecentRounds(48);
@@ -83,20 +87,20 @@ export function Dashboard() {
             className={`tab ${m.id === marketId ? "active" : ""}`}
             onClick={() => setMarketId(m.id)}
           >
-            {m.label}
+            {t.marketLabel(m.symbol, m.duration)}
           </button>
         ))}
       </div>
       <div className="row between center" style={{ margin: "4px 0 12px" }}>
         <LivePrice marketId={marketId} />
-        <span className="small muted">Prices: Perpl on-chain oracle (Chainlink Data Streams)</span>
+        <span className="small muted">{t.priceSource}</span>
       </div>
 
-      {error && <div className="panel error small">Could not read the contract: {error.message}</div>}
-      {isLoading && <div className="panel muted">Loading rounds…</div>}
+      {error && <div className="panel error small">{t.readError(error.message)}</div>}
+      {isLoading && <div className="panel muted">{t.loadingRounds}</div>}
       {!isLoading && !featured && (
         <div className="panel muted">
-          No round is open for this market right now. The keeper opens the next one shortly before it starts.
+          {t.noRound}
         </div>
       )}
 

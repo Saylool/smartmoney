@@ -14,21 +14,13 @@ import { useLivePrice, useNow } from "@/lib/hooks";
 import { Countdown } from "./Countdown";
 import { TxStatus } from "./TxStatus";
 import { ShareButton } from "./ShareButton";
-
-const PHASE_LABEL = {
-  betting: "Betting open",
-  starting: "Starting",
-  live: "Live",
-  settling: "Settling",
-  resolved: "Resolved",
-  voided: "Refunded",
-  empty: "No bets",
-} as const;
+import { useI18n } from "@/lib/i18n";
 
 const QUICK = ["0.05", "0.1", "0.5", "1"];
 
 export function RoundCard({ round, compact = false }: { round: RoundWithId; compact?: boolean }) {
   const now = useNow();
+  const { t } = useI18n();
   const { address } = useAccount();
   const market = marketById(round.marketId);
   const phase = phaseOf(round, now);
@@ -99,58 +91,58 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
     <section className={`panel round ${phase}`}>
       <div className="row between center">
         <div className="row center gap8">
-          <span className="market-label">{market.label}</span>
-          <span className={`badge ${phase}`}>{PHASE_LABEL[phase]}</span>
+          <span className="market-label">{t.marketLabel(market.symbol, market.duration)}</span>
+          <span className={`badge ${phase}`}>{t.phase[phase]}</span>
         </div>
-        <Link className="small muted" href={`/round/${round.id}`}>Round #{round.id.toString()}</Link>
+        <Link className="small muted" href={`/round/${round.id}`}>{t.round(round.id.toString())}</Link>
       </div>
 
       <div className="headline">
-        Smart money is{" "}
+        {t.smIs}{" "}
         <span className={isLong ? "long" : "short"}>
           {directionLabel(round.direction)} {market.symbol}
         </span>
-        {phase === "betting" && <span className="muted"> — right or wrong?</span>}
+        {phase === "betting" && <span className="muted">{t.rightOrWrong}</span>}
       </div>
 
       <div className="row gap16 wrap small">
-        {phase === "betting" && <Countdown to={round.bettingCloses} prefix="Betting closes" />}
-        {phase === "starting" && <span className="muted">Waiting for the start price from the oracle…</span>}
-        {phase === "empty" && <span className="muted">Nobody bet on this round, so there is nothing to settle.</span>}
-        {phase === "live" && <Countdown to={round.endTime} prefix="Ends" />}
-        {phase === "settling" && <span className="muted">Waiting for the end price from the oracle…</span>}
+        {phase === "betting" && <Countdown to={round.bettingCloses} prefix={t.bettingCloses} />}
+        {phase === "starting" && <span className="muted">{t.waitingStart}</span>}
+        {phase === "empty" && <span className="muted">{t.nobodyBet}</span>}
+        {phase === "live" && <Countdown to={round.endTime} prefix={t.ends} />}
+        {phase === "settling" && <span className="muted">{t.waitingEnd}</span>}
         {round.startPrice > 0n && (
-          <span>Start <span className="mono">${fmtPrice(round.startPrice, round.marketId)}</span></span>
+          <span>{t.start} <span className="mono">${fmtPrice(round.startPrice, round.marketId)}</span></span>
         )}
         {round.status === Status.Locked && price !== undefined && (
           <span>
-            Now <span className="mono">${fmtPrice(price, round.marketId)}</span>
+            {t.nowPrice} <span className="mono">${fmtPrice(price, round.marketId)}</span>
             {winning !== null && (
-              <span className={winning ? "ok" : "error"}> · smart money {winning ? "winning" : "losing"}</span>
+              <span className={winning ? "ok" : "error"}> · {winning ? t.smWinning : t.smLosing}</span>
             )}
           </span>
         )}
         {round.endPrice > 0n && (
-          <span>End <span className="mono">${fmtPrice(round.endPrice, round.marketId)}</span></span>
+          <span>{t.end} <span className="mono">${fmtPrice(round.endPrice, round.marketId)}</span></span>
         )}
         {round.status === Status.Resolved && (
           <span className={round.winner === Side.Right ? "ok strong" : "error strong"}>
-            Smart money was {round.winner === Side.Right ? "RIGHT" : "WRONG"}
+            {t.smWas(round.winner === Side.Right)}
           </span>
         )}
-        {round.status === Status.Voided && <span className="muted">Voided: every stake is refundable</span>}
+        {round.status === Status.Voided && <span className="muted">{t.voidedNote}</span>}
       </div>
 
       <div className="pools">
         <div className="pool right">
-          <div className="label">Right</div>
+          <div className="label">{t.poolRight}</div>
           <div className="value">{fmtMon(round.rightPool)} MON</div>
-          <div className="small muted">{round.rightBettors} bettors{mRight ? ` · pays ${mRight.toFixed(2)}x` : ""}</div>
+          <div className="small muted">{t.bettors(round.rightBettors)}{mRight ? t.pays(mRight.toFixed(2)) : ""}</div>
         </div>
         <div className="pool wrong">
-          <div className="label">Wrong</div>
+          <div className="label">{t.poolWrong}</div>
           <div className="value">{fmtMon(round.wrongPool)} MON</div>
-          <div className="small muted">{round.wrongBettors} bettors{mWrong ? ` · pays ${mWrong.toFixed(2)}x` : ""}</div>
+          <div className="small muted">{t.bettors(round.wrongBettors)}{mWrong ? t.pays(mWrong.toFixed(2)) : ""}</div>
         </div>
       </div>
       <div className="bar">
@@ -162,7 +154,7 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
         <div className="bet">
           <div className="row gap8 wrap center">
             <input
-              aria-label="Amount in MON"
+              aria-label={t.amountLabel}
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               inputMode="decimal"
@@ -174,30 +166,26 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
           </div>
           <div className="row gap8 wrap" style={{ marginTop: 10 }}>
             <button className="right grow" disabled={!address || busy || !parsed || tooSmall} onClick={() => bet(Side.Right)}>
-              Smart money is RIGHT
+              {t.betRight}
             </button>
             <button className="wrong grow" disabled={!address || busy || !parsed || tooSmall} onClick={() => bet(Side.Wrong)}>
-              Smart money is WRONG
+              {t.betWrong}
             </button>
           </div>
           <div className="small muted" style={{ marginTop: 6 }}>
-            {!address
-              ? "Connect a wallet to bet."
-              : tooSmall
-                ? `Minimum bet is ${fmtMon(minBet as bigint)} MON.`
-                : `Winners split the whole pool pro-rata; ${round.feeBps / 100}% fee on the losing side only.`}
+            {!address ? t.connectToBet : tooSmall ? t.minBet(fmtMon(minBet as bigint)) : t.feeNote(round.feeBps / 100)}
           </div>
         </div>
       )}
 
       {hasPos && pos && (
         <div className="position small">
-          Your stake: <span className="ok">{fmtMon(pos.right)} right</span> ·{" "}
-          <span className="error">{fmtMon(pos.wrong)} wrong</span>
-          {pos.claimed && <span className="muted"> · claimed</span>}
+          {t.yourStake} <span className="ok">{t.stakeRight(fmtMon(pos.right))}</span> ·{" "}
+          <span className="error">{t.stakeWrong(fmtMon(pos.wrong))}</span>
+          {pos.claimed && <span className="muted"> · {t.claimed}</span>}
           {!pos.claimed && typeof claimable === "bigint" && claimable > 0n && (
             <button className="claim" disabled={busy} onClick={claim}>
-              Claim {fmtMon(claimable)} MON
+              {t.claim(fmtMon(claimable))}
             </button>
           )}
         </div>
@@ -207,7 +195,7 @@ export function RoundCard({ round, compact = false }: { round: RoundWithId; comp
 
       {!compact && (
         <div className="row between center" style={{ marginTop: 10 }}>
-          <Link className="small" href={`/round/${round.id}`}>See the 20 traders behind this call →</Link>
+          <Link className="small" href={`/round/${round.id}`}>{t.seeTraders}</Link>
           <ShareButton round={round} />
         </div>
       )}

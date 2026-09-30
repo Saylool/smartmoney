@@ -7,8 +7,17 @@ import { WagmiProvider as PrivyWagmiProvider } from "@privy-io/wagmi";
 import { useState, type ReactNode } from "react";
 import { PRIVY_APP_ID, monad } from "@/lib/config";
 import { injectedConfig, privyConfig } from "@/lib/wagmi";
+import { I18nProvider } from "@/lib/i18n";
 
 export function Providers({ children }: { children: ReactNode }) {
+  return (
+    <I18nProvider>
+      <Web3Providers>{children}</Web3Providers>
+    </I18nProvider>
+  );
+}
+
+function Web3Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () => new QueryClient({ defaultOptions: { queries: { refetchInterval: 5000, staleTime: 2000 } } }),
   );

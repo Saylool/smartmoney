@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useReadContracts } from "wagmi";
 import { MARKETS } from "@/lib/config";
 import { smartMoney } from "@/lib/contract";
+import { useI18n } from "@/lib/i18n";
 
 type Backtest = {
   days: number;
@@ -16,6 +17,7 @@ type Backtest = {
 const pct = (r: number, w: number) => (r + w === 0 ? "—" : `${Math.round((r / (r + w)) * 1000) / 10}%`);
 
 export function TrackRecord() {
+  const { t } = useI18n();
   const { data } = useReadContracts({
     contracts: MARKETS.map((m) => ({ ...smartMoney, functionName: "marketStats" as const, args: [BigInt(m.id)] as const })),
   });
@@ -28,39 +30,33 @@ export function TrackRecord() {
 
   return (
     <section className="panel">
-      <h2>Is smart money actually right?</h2>
+      <h2>{t.isSmRight}</h2>
       <div className="stats-grid">
         {MARKETS.map((m, i) => {
           const s = data?.[i]?.result as readonly [number, number, number] | undefined;
           const [right, wrong, voided] = s ?? [0, 0, 0];
           return (
             <div key={m.id} className="stat">
-              <div className="label">{m.label}</div>
+              <div className="label">{t.marketLabel(m.symbol, m.duration)}</div>
               <div className="value">{pct(right, wrong)}</div>
-              <div className="small muted">
-                {right} right · {wrong} wrong · {voided} refunded
-              </div>
+              <div className="small muted">{t.statLine(right, wrong, voided)}</div>
             </div>
           );
         })}
       </div>
-      <p className="small muted">Live, on-chain track record of settled rounds on this contract.</p>
+      <p className="small muted">{t.liveRecord}</p>
       {bt && (
         <>
           <div className="stats-grid" style={{ marginTop: 12 }}>
             {Object.entries(bt.assets).map(([sym, a]) => (
               <div key={sym} className="stat">
-                <div className="label">{sym} · backtest {bt.days}d</div>
+                <div className="label">{t.backtestLabel(sym, bt.days)}</div>
                 <div className="value">{a.accuracy === null ? "—" : `${a.accuracy}%`}</div>
-                <div className="small muted">{a.right} right · {a.wrong} wrong of {a.hours} hours</div>
+                <div className="small muted">{t.backtestLine(a.right, a.wrong, a.hours)}</div>
               </div>
             ))}
           </div>
-          <p className="small muted">
-            Backtest: next-hour direction of Perpl&apos;s current top {bt.topN} traders, replayed hourly from on-chain state.
-            It is biased upward, because those traders were picked for being profitable in the same window. Even so, smart
-            money is close to a coin flip over one hour, which is exactly what makes this a fair market.
-          </p>
+          <p className="small muted">{t.backtestNote(bt.topN)}</p>
         </>
       )}
     </section>
